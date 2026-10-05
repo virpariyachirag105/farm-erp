@@ -1,0 +1,66 @@
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.*
+!.env.example
+
+# ========================
+# Python & Virtual Env
+# ========================
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ========================
+# Logs
+# ========================
+logs/*
+!logs/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# Frontend & Dependencies
+# ========================
+node_modules/
+frontend/node_modules/
+dist/
+dist-ssr/
+frontend/dist/
+*.local
+
+# ========================
+# Uploads / Media Storage
+# ========================
+uploads/*
+!uploads/**/.gitkeep
+
+# ========================
+# Editor & IDE
+# ========================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ========================
+# Databases & OS Files
+# ========================
+*.sqlite3
+*.db
+.DS_Store
+Thumbs.db
+Desktop.ini
