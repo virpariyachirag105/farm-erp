@@ -95,23 +95,25 @@ export const SettlementsPage: React.FC = () => {
   const [settlementToDelete, setSettlementToDelete] = useState<PartnerSettlement | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
 
-  const fetchData = async () => {
+  // Fetch static reference data once on mount
+  useEffect(() => {
+    Promise.all([
+      seasonService.getAll().catch(() => []),
+      farmService.getAll().catch(() => []),
+    ]).then(([seasonData, farmData]) => {
+      setSeasons(seasonData || []);
+      setFarms(farmData || []);
+    });
+  }, []);
+
+  // Fetch partner settlements table data
+  const fetchTableData = async () => {
     setLoading(true);
     try {
       const sId = seasonFilter !== 'ALL' ? Number(seasonFilter) : undefined;
       const fId = farmFilter !== 'ALL' ? Number(farmFilter) : undefined;
-
-      const [settlementData, partnerData, seasonData, farmData] = await Promise.all([
-        settlementService.getAll(sId, fId),
-        seasonPartnerService.getAll(),
-        seasonService.getAll(),
-        farmService.getAll(),
-      ]);
-
-      setSettlements(settlementData);
-      setSeasonPartners(partnerData);
-      setSeasons(seasonData);
-      setFarms(farmData);
+      const settlementData = await settlementService.getAll(sId, fId);
+      setSettlements(settlementData || []);
     } catch (e) {
       showError('Failed to load partner settlements.');
       console.error(e);
@@ -121,8 +123,23 @@ export const SettlementsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchTableData();
   }, [seasonFilter, farmFilter]);
+
+  // Lazy-load season partners only when opening create/edit modal
+  const ensurePartnerData = async (): Promise<SeasonPartner[]> => {
+    if (seasonPartners.length === 0) {
+      try {
+        const partnerData = await seasonPartnerService.getAll().catch(() => []);
+        setSeasonPartners(partnerData || []);
+        return partnerData || [];
+      } catch (e) {
+        console.error('Error loading season partners for settlement modal', e);
+        return [];
+      }
+    }
+    return seasonPartners;
+  };
 
   // Helper: Fetch Box Packaging Costs for a Season Partner's Season & Farm
   const fetchBoxCostsForPartner = async (partner: SeasonPartner): Promise<number> => {
@@ -156,7 +173,8 @@ export const SettlementsPage: React.FC = () => {
 
   const handleOpenCreate = async () => {
     setEditingSettlement(null);
-    const firstPartner = seasonPartners[0];
+    const pList = await ensurePartnerData();
+    const firstPartner = pList[0];
     const partnerId = firstPartner?.id || 0;
 
     let initialBoxExpense = 0;
@@ -185,8 +203,9 @@ export const SettlementsPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (st: PartnerSettlement) => {
+  const handleOpenEdit = async (st: PartnerSettlement) => {
     setEditingSettlement(st);
+    await ensurePartnerData();
     setLastCalculatedBoxCost(Number(st.total_expenses));
     setFormData({
       season_partner_id: st.season_partner_id,
@@ -281,7 +300,7 @@ export const SettlementsPage: React.FC = () => {
         showSuccess('Partner settlement calculated and saved!');
       }
       setIsModalOpen(false);
-      fetchData();
+      fetchTableData();
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { detail?: string } } };
       const msg = errorObj?.response?.data?.detail || 'Failed to process settlement.';
@@ -300,7 +319,7 @@ export const SettlementsPage: React.FC = () => {
       showSuccess('Settlement entry deleted.');
       setDeleteDialogOpen(false);
       setSettlementToDelete(null);
-      fetchData();
+      fetchTableData();
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { detail?: string } } };
       const msg = errorObj?.response?.data?.detail || 'Failed to delete settlement.';

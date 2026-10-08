@@ -72,27 +72,25 @@ export const BoxCostsPage: React.FC = () => {
   const [costToDelete, setCostToDelete] = useState<SeasonBoxCost | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
 
-  const fetchData = async () => {
+  // Fetch static reference data once on mount
+  useEffect(() => {
+    Promise.all([
+      seasonService.getAll().catch(() => []),
+      farmService.getAll().catch(() => []),
+    ]).then(([seasonData, farmData]) => {
+      setSeasons(seasonData || []);
+      setFarms(farmData || []);
+    });
+  }, []);
+
+  // Fetch box costs table data when filter changes
+  const fetchTableData = async () => {
     setLoading(true);
     try {
       const sId = seasonFilter !== 'ALL' ? Number(seasonFilter) : undefined;
       const fId = farmFilter !== 'ALL' ? Number(farmFilter) : undefined;
-
-      const [costData, seasonData, farmData, partnerData, dispatchData, itemData] = await Promise.all([
-        boxCostService.getAll(sId, fId),
-        seasonService.getAll().catch(() => []),
-        farmService.getAll().catch(() => []),
-        seasonPartnerService.getAll().catch(() => []),
-        dispatchService.getAll().catch(() => []),
-        dispatchService.getDispatchItems().catch(() => []),
-      ]);
-
+      const costData = await boxCostService.getAll(sId, fId);
       setBoxCosts(costData || []);
-      setSeasons(seasonData || []);
-      setFarms(farmData || []);
-      setSeasonPartners(partnerData || []);
-      setDispatches(dispatchData || []);
-      setDispatchItems(itemData || []);
     } catch (e) {
       showError('Failed to load box packaging costs.');
       console.error(e);
@@ -102,24 +100,55 @@ export const BoxCostsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchTableData();
   }, [seasonFilter, farmFilter]);
 
+  // Lazy-load modal calculation dependencies (partners, dispatches, items) only when modal opens
+  const ensureModalDependencies = async () => {
+    let pList = seasonPartners;
+    let dList = dispatches;
+    let iList = dispatchItems;
+
+    if (pList.length === 0 || dList.length === 0 || iList.length === 0) {
+      try {
+        const [partnerData, dispatchData, itemData] = await Promise.all([
+          pList.length === 0 ? seasonPartnerService.getAll().catch(() => []) : Promise.resolve(pList),
+          dList.length === 0 ? dispatchService.getAll().catch(() => []) : Promise.resolve(dList),
+          iList.length === 0 ? dispatchService.getDispatchItems().catch(() => []) : Promise.resolve(iList),
+        ]);
+        if (pList.length === 0) setSeasonPartners(partnerData || []);
+        if (dList.length === 0) setDispatches(dispatchData || []);
+        if (iList.length === 0) setDispatchItems(itemData || []);
+        pList = partnerData || [];
+        dList = dispatchData || [];
+        iList = itemData || [];
+      } catch (e) {
+        console.error('Error loading modal calculation dependencies', e);
+      }
+    }
+    return { seasonPartners: pList, dispatches: dList, dispatchItems: iList };
+  };
+
   // Helper: Get farms associated with a given season
-  const getFarmsForSeason = (seasonId: number): Farm[] => {
+  const getFarmsForSeason = (
+    seasonId: number,
+    pList: SeasonPartner[] = seasonPartners,
+    dList: DispatchListItem[] = dispatches,
+    iList: DispatchItem[] = dispatchItems
+  ): Farm[] => {
     if (!seasonId) return [];
 
     // 1. Farms registered under Season Partners
     const partnerFarmIds = new Set(
-      seasonPartners.filter((sp) => sp.season_id === seasonId).map((sp) => sp.farm_id)
+      pList.filter((sp) => sp.season_id === seasonId).map((sp) => sp.farm_id)
     );
 
     // 2. Farms used in Dispatches for this season
     const seasonDispatchIds = new Set(
-      dispatches.filter((d) => d.season_id === seasonId).map((d) => d.id)
+      dList.filter((d) => d.season_id === seasonId).map((d) => d.id)
     );
     const dispatchFarmIds = new Set(
-      dispatchItems
+      iList
         .filter((it) => it.dispatch_id && seasonDispatchIds.has(it.dispatch_id) && it.farm_id)
         .map((it) => it.farm_id as number)
     );
@@ -159,10 +188,11 @@ export const BoxCostsPage: React.FC = () => {
   };
 
   // Open Create Popup with Auto-Population
-  const handleOpenCreate = () => {
+  const handleOpenCreate = async () => {
     setEditingBoxCost(null);
+    const deps = await ensureModalDependencies();
     const initialSeasonId = seasons[0]?.id || 0;
-    const associatedFarms = getFarmsForSeason(initialSeasonId);
+    const associatedFarms = getFarmsForSeason(initialSeasonId, deps.seasonPartners, deps.dispatches, deps.dispatchItems);
     const initialFarmId = associatedFarms[0]?.id || farms[0]?.id || 0;
     const initialBoxSize: BoxSize = '10';
 
@@ -170,8 +200,8 @@ export const BoxCostsPage: React.FC = () => {
       initialSeasonId,
       initialFarmId,
       initialBoxSize,
-      dispatches,
-      dispatchItems
+      deps.dispatches,
+      deps.dispatchItems
     );
 
     setFormData({
@@ -249,8 +279,9 @@ export const BoxCostsPage: React.FC = () => {
     });
   };
 
-  const handleOpenEdit = (cost: SeasonBoxCost) => {
+  const handleOpenEdit = async (cost: SeasonBoxCost) => {
     setEditingBoxCost(cost);
+    await ensureModalDependencies();
     setFormData({
       season_id: cost.season_id,
       farm_id: cost.farm_id,
@@ -300,7 +331,7 @@ export const BoxCostsPage: React.FC = () => {
         showSuccess('Box packaging cost recorded!');
       }
       setIsModalOpen(false);
-      fetchData();
+      fetchTableData();
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { detail?: string } } };
       const msg = errorObj?.response?.data?.detail || 'Failed to save box cost.';
@@ -319,7 +350,7 @@ export const BoxCostsPage: React.FC = () => {
       showSuccess('Box cost entry deleted.');
       setDeleteDialogOpen(false);
       setCostToDelete(null);
-      fetchData();
+      fetchTableData();
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { detail?: string } } };
       const msg = errorObj?.response?.data?.detail || 'Failed to delete box cost.';

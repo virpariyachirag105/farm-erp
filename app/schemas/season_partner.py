@@ -12,6 +12,32 @@ class SeasonPartnerRequest(BaseModel):
     agreement_date: date | None = None
     remarks: str
 
+class SeasonSummary(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class FarmSummary(BaseModel):
+    id: int
+    name: str
+    farm_type: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserSummary(BaseModel):
+    id: int
+    name: str
+    email: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class SeasonPartnerResponse(BaseModel):
     id: int
     season_id: int
@@ -21,6 +47,9 @@ class SeasonPartnerResponse(BaseModel):
     partnership_percentage: Decimal | None = None
     agreement_date: date | None = None
     remarks: str
+    season: SeasonSummary | None = None
+    farm: FarmSummary | None = None
+    user: UserSummary | None = None
 
     class Config:
         from_attributes = True

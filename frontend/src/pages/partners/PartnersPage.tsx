@@ -69,16 +69,12 @@ export const PartnersPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [partnerData, seasonData, farmData, userData] = await Promise.all([
+      const [partnerData, seasonData] = await Promise.all([
         seasonPartnerService.getAll(),
         seasonService.getAll(),
-        farmService.getAll(),
-        userService.getAll().catch(() => []),
       ]);
       setPartners(partnerData);
       setSeasons(seasonData);
-      setFarms(farmData);
-      setUsers(userData || []);
     } catch (e) {
       showError('Failed to load season partners data.');
       console.error(e);
@@ -91,11 +87,29 @@ export const PartnersPage: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleOpenCreate = () => {
+  const ensureFormData = async () => {
+    if (farms.length === 0 || users.length === 0) {
+      try {
+        const [farmData, userData] = await Promise.all([
+          farms.length === 0 ? farmService.getAll().catch(() => []) : Promise.resolve(farms),
+          users.length === 0 ? userService.getAll().catch(() => []) : Promise.resolve(users),
+        ]);
+        if (farms.length === 0) setFarms(farmData);
+        if (users.length === 0) setUsers(userData || []);
+        return { farms: farmData, users: userData || [] };
+      } catch (e) {
+        console.error('Error loading modal dependencies', e);
+      }
+    }
+    return { farms, users };
+  };
+
+  const handleOpenCreate = async () => {
     setEditingPartner(null);
+    const deps = await ensureFormData();
     setFormData({
       season_id: seasons[0]?.id || 0,
-      farm_id: farms[0]?.id || 0,
+      farm_id: deps.farms[0]?.id || farms[0]?.id || 0,
       user_id: null,
       partner_name: '',
       partnership_percentage: 50,
@@ -106,8 +120,9 @@ export const PartnersPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (item: SeasonPartner) => {
+  const handleOpenEdit = async (item: SeasonPartner) => {
     setEditingPartner(item);
+    await ensureFormData();
     setFormData({
       season_id: item.season_id,
       farm_id: item.farm_id,
@@ -178,12 +193,13 @@ export const PartnersPage: React.FC = () => {
     }
   };
 
-  const getSeasonName = (id: number) => seasons.find((s) => s.id === id)?.name || `Season #${id}`;
-  const getFarmName = (id: number) => farms.find((f) => f.id === id)?.name || `Farm #${id}`;
-  const getUserName = (id?: number | null) => {
-    if (!id) return '-';
-    const u = users.find((x) => x.id === id);
-    return u ? `${u.name} (${u.email})` : `User #${id}`;
+  const getSeasonName = (row: SeasonPartner) => row.season?.name || seasons.find((s) => s.id === row.season_id)?.name || `Season #${row.season_id}`;
+  const getFarmName = (row: SeasonPartner) => row.farm?.name || farms.find((f) => f.id === row.farm_id)?.name || `Farm #${row.farm_id}`;
+  const getUserName = (row: SeasonPartner) => {
+    if (row.user?.name) return `${row.user.name} (${row.user.email || ''})`;
+    if (!row.user_id) return '-';
+    const u = users.find((x) => x.id === row.user_id);
+    return u ? `${u.name} (${u.email})` : `User #${row.user_id}`;
   };
 
   const filteredPartners = partners.filter((p) => {
@@ -203,22 +219,22 @@ export const PartnersPage: React.FC = () => {
       id: 'user_id',
       label: 'Linked Account',
       minWidth: 160,
-      sortValue: (row) => getUserName(row.user_id),
-      render: (row) => getUserName(row.user_id),
+      sortValue: (row) => getUserName(row),
+      render: (row) => getUserName(row),
     },
     {
       id: 'season_id',
       label: 'Season',
       minWidth: 160,
-      sortValue: (row) => getSeasonName(row.season_id),
-      render: (row) => getSeasonName(row.season_id),
+      sortValue: (row) => getSeasonName(row),
+      render: (row) => getSeasonName(row),
     },
     {
       id: 'farm_id',
       label: 'Farm',
       minWidth: 160,
-      sortValue: (row) => getFarmName(row.farm_id),
-      render: (row) => getFarmName(row.farm_id),
+      sortValue: (row) => getFarmName(row),
+      render: (row) => getFarmName(row),
     },
     {
       id: 'partnership_percentage',
@@ -294,7 +310,7 @@ export const PartnersPage: React.FC = () => {
         data={filteredPartners}
         loading={loading}
         searchPlaceholder="Search partner name or remarks..."
-        searchField={(row) => `${row.partner_name || ''} ${getFarmName(row.farm_id)} ${row.remarks || ''}`}
+        searchField={(row) => `${row.partner_name || ''} ${getFarmName(row)} ${row.remarks || ''}`}
         filterComponent={
           <TextField
             select

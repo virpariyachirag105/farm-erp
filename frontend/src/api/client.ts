@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Vite proxy routes /api to http://127.0.0.1:8000, stripping /api prefix
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
-
+console.log(baseURL);
 export const apiClient = axios.create({
   baseURL,
   headers: {

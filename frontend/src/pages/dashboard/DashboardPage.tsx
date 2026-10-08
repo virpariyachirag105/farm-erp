@@ -99,6 +99,10 @@ export const DashboardPage: React.FC = () => {
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL');
   const [selectedFarm, setSelectedFarm] = useState<string>('ALL');
 
+  // Refs to prevent premature and duplicate summary requests
+  const isInitializedRef = React.useRef(false);
+  const prevFetchKeyRef = React.useRef<string>('');
+
   // Allowed farms for the logged-in user filtered by selected season
   const userAllowedFarms = useMemo(() => {
     let baseFarms = farms;
@@ -144,6 +148,8 @@ export const DashboardPage: React.FC = () => {
 
   // When selectedSeason or userAllowedFarms changes, refresh selectedFarm
   useEffect(() => {
+    if (!isInitializedRef.current) return;
+
     if (userAllowedFarms.length === 0) {
       if (selectedFarm !== 'ALL') setSelectedFarm('ALL');
       return;
@@ -151,7 +157,10 @@ export const DashboardPage: React.FC = () => {
 
     // Automatically select the single farm if only 1 farm exists for this season
     if (userAllowedFarms.length === 1) {
-      setSelectedFarm(String(userAllowedFarms[0].id));
+      const singleFarmId = String(userAllowedFarms[0].id);
+      if (selectedFarm !== singleFarmId) {
+        setSelectedFarm(singleFarmId);
+      }
       return;
     }
 
@@ -179,15 +188,19 @@ export const DashboardPage: React.FC = () => {
         dispatchService.getDispatchItems().catch(() => []),
       ]);
 
-      // Determine default season (active season or latest season)
-      const defaultSeason = seasonData.find((s: Season) => s.status === 'ACTIVE') || seasonData[0];
-      const initialSeasonId = defaultSeason ? String(defaultSeason.id) : 'ALL';
-      const initialSeasonNum = defaultSeason ? defaultSeason.id : 0;
+      // Determine target season: preserve existing selection if valid, or default to ACTIVE/first season
+      let targetSeasonId = selectedSeason;
+      if (!isInitializedRef.current || targetSeasonId === 'ALL') {
+        const defaultSeason = seasonData.find((s: Season) => s.status === 'ACTIVE') || seasonData[0];
+        targetSeasonId = defaultSeason ? String(defaultSeason.id) : 'ALL';
+      }
 
-      // Determine initial allowed farms for this default season
+      const seasonNum = targetSeasonId === 'ALL' ? 0 : Number(targetSeasonId);
+
+      // Determine allowed farms for this target season
       let initialAllowedFarms = farmData;
-      if (initialSeasonId !== 'ALL') {
-        const sId = Number(initialSeasonId);
+      if (targetSeasonId !== 'ALL') {
+        const sId = Number(targetSeasonId);
         const sFarmIds = new Set<number>();
         partnerData.filter((sp: SeasonPartner) => sp.season_id === sId).forEach((sp: SeasonPartner) => sFarmIds.add(sp.farm_id));
         itemData.forEach((it: DispatchItem) => {
@@ -208,12 +221,18 @@ export const DashboardPage: React.FC = () => {
         }
       }
 
-      const initialFarmId = initialAllowedFarms.length === 1 ? String(initialAllowedFarms[0].id) : 'ALL';
-      const initialFarmNum = initialFarmId === 'ALL' ? undefined : Number(initialFarmId);
+      let targetFarmId = selectedFarm;
+      if (!isInitializedRef.current || (targetFarmId !== 'ALL' && !initialAllowedFarms.some((f: Farm) => String(f.id) === targetFarmId))) {
+        targetFarmId = initialAllowedFarms.length === 1 ? String(initialAllowedFarms[0].id) : 'ALL';
+      }
+      const farmNum = targetFarmId === 'ALL' ? undefined : Number(targetFarmId);
 
-      // Synchronously fetch dealer summaries matching the default season & farm
+      // Fetch dealer summary exactly once for the resolved season & farm
+      const fetchKey = `${seasonNum}_${farmNum ?? 'ALL'}`;
+      prevFetchKeyRef.current = fetchKey;
+
       const initialSummaries = await dealerCalculationService
-        .getSeasonSummary(initialSeasonNum, initialFarmNum)
+        .getSeasonSummary(seasonNum, farmNum)
         .catch(() => []);
 
       setFarms(farmData);
@@ -223,8 +242,9 @@ export const DashboardPage: React.FC = () => {
       setDispatches(dispatchData);
       setDispatchItems(itemData);
       setDealerSummaries(initialSummaries);
-      setSelectedSeason(initialSeasonId);
-      setSelectedFarm(initialFarmId);
+      setSelectedSeason(targetSeasonId);
+      setSelectedFarm(targetFarmId);
+      isInitializedRef.current = true;
     } catch (e) {
       console.error('Error fetching dashboard metrics', e);
     } finally {
@@ -236,11 +256,22 @@ export const DashboardPage: React.FC = () => {
     fetchDashboardData();
   }, []);
 
-  // Fetch dealer calculations dynamically whenever season or farm changes
+  // Fetch dealer calculations dynamically ONLY when user changes season or farm after initial load
   useEffect(() => {
-    let isCurrent = true;
+    if (!isInitializedRef.current) return;
+
     const sId = selectedSeason === 'ALL' ? 0 : Number(selectedSeason);
     const fId = selectedFarm === 'ALL' ? undefined : Number(selectedFarm);
+    const currentKey = `${sId}_${fId ?? 'ALL'}`;
+
+    // Skip if already fetched during fetchDashboardData or previous effect
+    if (prevFetchKeyRef.current === currentKey) {
+      return;
+    }
+
+    prevFetchKeyRef.current = currentKey;
+    let isCurrent = true;
+
     dealerCalculationService
       .getSeasonSummary(sId, fId)
       .then((data) => {
