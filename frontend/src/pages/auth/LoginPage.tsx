@@ -420,7 +420,7 @@ export const LoginPage: React.FC = () => {
               </Box>
 
               {/* Demo credentials helper */}
-              <Box
+              {/* <Box
                 sx={{
                   mt: 1,
                   p: 2,
@@ -449,7 +449,7 @@ export const LoginPage: React.FC = () => {
                     sx={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                   />
                 </Box>
-              </Box>
+              </Box> */}
             </Box>
           )}
 
