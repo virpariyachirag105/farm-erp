@@ -23,6 +23,10 @@ import ScaleIcon from '@mui/icons-material/Scale';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -51,6 +55,8 @@ import dealerService from '../../services/dealerService';
 import dispatchService from '../../services/dispatchService';
 import seasonPartnerService from '../../services/seasonPartnerService';
 import dealerCalculationService from '../../services/dealerCalculationService';
+import boxCostService from '../../services/boxCostService';
+import expenseService from '../../services/expenseService';
 
 import { DispatchItem, DispatchListItem } from '../../types/dispatch';
 import { Farm } from '../../types/farm';
@@ -58,6 +64,8 @@ import { Season } from '../../types/season';
 import { Dealer } from '../../types/dealer';
 import { SeasonPartner } from '../../types/seasonPartner';
 import { DealerSummary } from '../../types/dealerCalculation';
+import { SeasonBoxCost } from '../../types/boxCost';
+import { Expense } from '../../types/expense';
 import { formatDate } from '../../utils/dateUtils';
 import { isUserAdmin } from '../../utils/permissions';
 
@@ -74,8 +82,13 @@ const CHART_COLORS = [
   '#06b6d4', // Cyan
 ];
 
-const formatCurrency = (val: number) =>
-  `₹${Math.round(Number(val || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+const formatCurrency = (val: number) => {
+  const rounded = Math.round(Number(val || 0));
+  if (rounded < 0) {
+    return `-₹${Math.abs(rounded).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  }
+  return `₹${rounded.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
 
 export const DashboardPage: React.FC = () => {
   const { user, hasPermission, hasModuleAccess } = useAuth();
@@ -83,6 +96,9 @@ export const DashboardPage: React.FC = () => {
 
   const canViewDispatch = hasPermission('dispatch.view');
   const canAccessFarms = hasModuleAccess('farm');
+  const canViewBoxCost = hasPermission('season_box_cost.list') || hasModuleAccess('season_box_cost');
+  const canViewExpense = hasPermission('expense.list') || hasModuleAccess('expense');
+  const canViewSettlement = hasPermission('partner_settlement.list') || hasModuleAccess('partner_settlement');
 
   const isUnscoped = isUserAdmin(user) || user?.role_id === 4;
 
@@ -94,6 +110,8 @@ export const DashboardPage: React.FC = () => {
   const [dispatches, setDispatches] = useState<DispatchListItem[]>([]);
   const [dispatchItems, setDispatchItems] = useState<DispatchItem[]>([]);
   const [dealerSummaries, setDealerSummaries] = useState<DealerSummary[]>([]);
+  const [boxCosts, setBoxCosts] = useState<SeasonBoxCost[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<string>('ALL');
@@ -179,6 +197,8 @@ export const DashboardPage: React.FC = () => {
         partnerData,
         dispatchData,
         itemData,
+        boxCostData,
+        expenseData,
       ] = await Promise.all([
         farmService.getAll().catch(() => []),
         seasonService.getAll().catch(() => []),
@@ -186,6 +206,8 @@ export const DashboardPage: React.FC = () => {
         seasonPartnerService.getAll().catch(() => []),
         dispatchService.getAll().catch(() => []),
         dispatchService.getDispatchItems().catch(() => []),
+        boxCostService.getAll().catch(() => []),
+        expenseService.getAll().catch(() => []),
       ]);
 
       // Determine target season: preserve existing selection if valid, or default to ACTIVE/first season
@@ -242,6 +264,8 @@ export const DashboardPage: React.FC = () => {
       setDispatches(dispatchData);
       setDispatchItems(itemData);
       setDealerSummaries(initialSummaries);
+      setBoxCosts(boxCostData);
+      setExpenses(expenseData);
       setSelectedSeason(targetSeasonId);
       setSelectedFarm(targetFarmId);
       isInitializedRef.current = true;
@@ -294,8 +318,13 @@ export const DashboardPage: React.FC = () => {
   const {
     filteredDispatches,
     filteredFarms,
+    filteredBoxCosts,
+    filteredExpenses,
     totalRevenue,
     netRevenue,
+    totalBoxCosts,
+    totalExpenses,
+    netProfit,
     totalWeightKg,
     totalBoxes,
     count5kg,
@@ -346,6 +375,30 @@ export const DashboardPage: React.FC = () => {
       ? userAllowedFarms
       : userAllowedFarms.filter((f) => f.id === farmIdNum);
 
+    // Filter box packaging costs based on selected season and farm
+    const fBoxCosts = boxCosts.filter((bc) => {
+      if (!isAll && bc.season_id !== seasonIdNum) return false;
+      if (!isFarmAll) {
+        return Number(bc.farm_id) === farmIdNum;
+      }
+      if (partnerFarmIdSet) {
+        return bc.farm_id && partnerFarmIdSet.has(Number(bc.farm_id));
+      }
+      return true;
+    });
+
+    // Filter expenses based on selected season and farm
+    const fExpenses = expenses.filter((exp) => {
+      if (!isAll && exp.season_id !== seasonIdNum) return false;
+      if (!isFarmAll) {
+        return Number(exp.farm_id) === farmIdNum;
+      }
+      if (partnerFarmIdSet) {
+        return exp.farm_id && partnerFarmIdSet.has(Number(exp.farm_id));
+      }
+      return true;
+    });
+
     // KPI Metrics:
     // If specific farm or partner is selected, isolate that farm's items revenue
     // If All Farms is selected by Admin, sum total dispatches
@@ -355,6 +408,23 @@ export const DashboardPage: React.FC = () => {
 
     // Net Revenue from dealer summaries calculated by backend for the selected season & farm
     const netRev = dealerSummaries.reduce((acc, d) => acc + Number(d.totals?.net_amount || 0), 0);
+
+    // Total Box Costs
+    const bCosts = fBoxCosts.reduce((acc, curr) => {
+      const amt = curr.total_amount != null
+        ? Number(curr.total_amount)
+        : Number(curr.total_boxes || 0) * Number(curr.price_per_box || 0);
+      return acc + (isNaN(amt) ? 0 : amt);
+    }, 0);
+
+    // Total Expenses
+    const exps = fExpenses.reduce((acc, curr) => {
+      const amt = Number(curr.amount || 0);
+      return acc + (isNaN(amt) ? 0 : amt);
+    }, 0);
+
+    // Net Profit: final profit after deducting all expenses including box costs
+    const profit = Number(netRev || 0) - bCosts - exps;
 
     const boxes = !isFarmAll || !isUnscoped
       ? fItems.reduce((acc, curr) => acc + Number(curr.box_quantity || 0), 0)
@@ -495,8 +565,13 @@ export const DashboardPage: React.FC = () => {
       filteredDispatches: fDispatches,
       filteredItems: fItems,
       filteredFarms: fFarms,
+      filteredBoxCosts: fBoxCosts,
+      filteredExpenses: fExpenses,
       totalRevenue: rev,
       netRevenue: netRev,
+      totalBoxCosts: bCosts,
+      totalExpenses: exps,
+      netProfit: profit,
       totalWeightKg: weight,
       totalBoxes: boxes,
       count5kg: c5,
@@ -516,6 +591,8 @@ export const DashboardPage: React.FC = () => {
     dealers,
     seasonPartners,
     dealerSummaries,
+    boxCosts,
+    expenses,
     userAllowedFarms,
     isUnscoped,
     user,
@@ -650,6 +727,72 @@ export const DashboardPage: React.FC = () => {
             icon={<AccountBalanceWalletOutlinedIcon />}
             color="#10b981"
             onClick={() => navigate('/calculations/dealer')}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Financial & Net Profit KPI Summary Cards */}
+      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
+        {/* Total Box Costs */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard
+            title="Total Box Costs"
+            value={formatCurrency(totalBoxCosts)}
+            subtitle={
+              filteredBoxCosts.length === 1
+                ? '1 box packaging cost record'
+                : `${filteredBoxCosts.length} box packaging cost records`
+            }
+            trendText={
+              netRevenue > 0
+                ? `${((totalBoxCosts / netRevenue) * 100).toFixed(1)}% of net revenue`
+                : undefined
+            }
+            icon={<Inventory2OutlinedIcon />}
+            color="#8b5cf6"
+            onClick={canViewBoxCost ? () => navigate('/box-costs') : undefined}
+          />
+        </Grid>
+
+        {/* Total Expenses */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard
+            title="Total Expenses"
+            value={formatCurrency(totalExpenses)}
+            subtitle={
+              filteredExpenses.length === 1
+                ? '1 operational expense recorded'
+                : `${filteredExpenses.length} operational expenses recorded`
+            }
+            trendText={
+              netRevenue > 0
+                ? `${((totalExpenses / netRevenue) * 100).toFixed(1)}% of net revenue`
+                : undefined
+            }
+            icon={<ReceiptLongOutlinedIcon />}
+            color="#ef4444"
+            onClick={canViewExpense ? () => navigate('/expenses') : undefined}
+          />
+        </Grid>
+
+        {/* Net Profit */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard
+            title="Net Profit"
+            value={formatCurrency(netProfit)}
+            subtitle={
+              netProfit >= 0
+                ? 'Net revenue minus all expenses & box costs'
+                : 'Total expenses exceed net revenue'
+            }
+            trendText={
+              netRevenue > 0
+                ? `${((netProfit / netRevenue) * 100).toFixed(1)}% profit margin`
+                : undefined
+            }
+            icon={netProfit >= 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+            color={netProfit >= 0 ? '#059669' : '#dc2626'}
+            onClick={canViewSettlement ? () => navigate('/settlements') : undefined}
           />
         </Grid>
       </Grid>

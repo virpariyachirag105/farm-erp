@@ -33,6 +33,7 @@ import seasonPartnerService from '../../services/seasonPartnerService';
 import seasonService from '../../services/seasonService';
 import farmService from '../../services/farmService';
 import boxCostService from '../../services/boxCostService';
+import expenseService from '../../services/expenseService';
 
 import { PartnerSettlement, PartnerSettlementRequest } from '../../types/settlement';
 import { SeasonPartner } from '../../types/seasonPartner';
@@ -70,9 +71,13 @@ export const SettlementsPage: React.FC = () => {
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [previewImageDialogUrl, setPreviewImageDialogUrl] = useState<string | null>(null);
 
-  // Auto-fetch state for box packaging costs
-  const [fetchingBoxCost, setFetchingBoxCost] = useState<boolean>(false);
-  const [lastCalculatedBoxCost, setLastCalculatedBoxCost] = useState<number>(0);
+  // Auto-fetch state for combined expenses (box packaging costs + farm expenses)
+  const [fetchingExpenses, setFetchingExpenses] = useState<boolean>(false);
+  const [costBreakdown, setCostBreakdown] = useState<{ boxCosts: number; farmExpenses: number; total: number }>({
+    boxCosts: 0,
+    farmExpenses: 0,
+    total: 0,
+  });
 
   // Form fields
   const [formData, setFormData] = useState<PartnerSettlementRequest>({
@@ -141,33 +146,57 @@ export const SettlementsPage: React.FC = () => {
     return seasonPartners;
   };
 
-  // Helper: Fetch Box Packaging Costs for a Season Partner's Season & Farm
-  const fetchBoxCostsForPartner = async (partner: SeasonPartner): Promise<number> => {
+  // Helper: Fetch Box Packaging Costs & Farm Expenses for a Season Partner's Season & Farm
+  const fetchCostsForPartner = async (
+    partner: SeasonPartner
+  ): Promise<{ boxCosts: number; farmExpenses: number; total: number }> => {
     try {
-      const boxCosts = await boxCostService.getAll(partner.season_id, partner.farm_id);
-      const totalBoxCost = boxCosts.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
-      return totalBoxCost;
+      const [boxCosts, expenses] = await Promise.all([
+        boxCostService.getAll(partner.season_id, partner.farm_id).catch(() => []),
+        expenseService.getAll(partner.season_id, partner.farm_id).catch(() => []),
+      ]);
+
+      const totalBoxCost = boxCosts.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.total_amount ??
+              (Number(item.total_boxes || 0) * Number(item.price_per_box || 0))
+          ),
+        0
+      );
+
+      const totalFarmExpenses = expenses.reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0
+      );
+
+      return {
+        boxCosts: totalBoxCost,
+        farmExpenses: totalFarmExpenses,
+        total: totalBoxCost + totalFarmExpenses,
+      };
     } catch (err) {
-      console.error('Failed to fetch box packaging costs for partner:', err);
-      return 0;
+      console.error('Failed to fetch costs for partner:', err);
+      return { boxCosts: 0, farmExpenses: 0, total: 0 };
     }
   };
 
-  // When Season Partner changes in the dropdown -> auto-populate Total Expense from Box Packaging Cost
+  // When Season Partner changes in the dropdown -> auto-populate Total Expense from Box Packaging Costs + Farm Expenses
   const handlePartnerSelectChange = async (partnerId: number) => {
     const matchedPartner = seasonPartners.find((sp) => sp.id === partnerId);
     if (!matchedPartner) return;
 
-    setFetchingBoxCost(true);
-    const boxCostTotal = await fetchBoxCostsForPartner(matchedPartner);
-    setFetchingBoxCost(false);
-    setLastCalculatedBoxCost(boxCostTotal);
+    setFetchingExpenses(true);
+    const costs = await fetchCostsForPartner(matchedPartner);
+    setFetchingExpenses(false);
+    setCostBreakdown(costs);
 
     setFormData((prev) => ({
       ...prev,
       season_partner_id: partnerId,
       partner_percentage: matchedPartner.partnership_percentage ?? 50,
-      total_expenses: boxCostTotal,
+      total_expenses: costs.total,
     }));
   };
 
@@ -177,19 +206,19 @@ export const SettlementsPage: React.FC = () => {
     const firstPartner = pList[0];
     const partnerId = firstPartner?.id || 0;
 
-    let initialBoxExpense = 0;
+    let initialCosts = { boxCosts: 0, farmExpenses: 0, total: 0 };
     if (firstPartner) {
-      setFetchingBoxCost(true);
-      initialBoxExpense = await fetchBoxCostsForPartner(firstPartner);
-      setFetchingBoxCost(false);
+      setFetchingExpenses(true);
+      initialCosts = await fetchCostsForPartner(firstPartner);
+      setFetchingExpenses(false);
     }
-    setLastCalculatedBoxCost(initialBoxExpense);
+    setCostBreakdown(initialCosts);
 
     setFormData({
       season_partner_id: partnerId,
       settlement_date: new Date().toISOString().split('T')[0],
       total_sales: 100000,
-      total_expenses: initialBoxExpense,
+      total_expenses: initialCosts.total,
       partner_percentage: firstPartner?.partnership_percentage ?? 50,
       amount_paid: 0,
       payment_date: new Date().toISOString().split('T')[0],
@@ -205,8 +234,22 @@ export const SettlementsPage: React.FC = () => {
 
   const handleOpenEdit = async (st: PartnerSettlement) => {
     setEditingSettlement(st);
-    await ensurePartnerData();
-    setLastCalculatedBoxCost(Number(st.total_expenses));
+    const pList = await ensurePartnerData();
+    const matchedPartner = pList.find((sp) => sp.id === st.season_partner_id);
+
+    if (matchedPartner) {
+      setFetchingExpenses(true);
+      const costs = await fetchCostsForPartner(matchedPartner);
+      setFetchingExpenses(false);
+      setCostBreakdown(costs);
+    } else {
+      setCostBreakdown({
+        boxCosts: 0,
+        farmExpenses: 0,
+        total: Number(st.total_expenses || 0),
+      });
+    }
+
     setFormData({
       season_partner_id: st.season_partner_id,
       settlement_date: st.settlement_date || '',
@@ -575,7 +618,7 @@ export const SettlementsPage: React.FC = () => {
 
           <Box sx={{ flex: 1 }}>
             <TextField
-              label="Total Farm Expenses (₹)"
+              label="Total Expenses (Box + Farm Costs) (₹)"
               type="number"
               required
               fullWidth
@@ -583,20 +626,20 @@ export const SettlementsPage: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, total_expenses: parseFloat(e.target.value) || 0 })}
               slotProps={{ htmlInput: { min: 0, step: 'any' } }}
             />
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5, px: 0.5 }}>
-              <Typography variant="caption" sx={{ color: fetchingBoxCost ? '#0284c7' : '#16a34a', fontWeight: 600 }}>
-                {fetchingBoxCost
-                  ? '⏳ Fetching box packaging costs...'
-                  : `📦 Box Costs for Season/Farm: ₹${lastCalculatedBoxCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5, px: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ color: fetchingExpenses ? '#0284c7' : '#16a34a', fontWeight: 600 }}>
+                {fetchingExpenses
+                  ? '⏳ Fetching box costs and farm expenses...'
+                  : `📊 Calculated: ₹${costBreakdown.total.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (📦 Box: ₹${costBreakdown.boxCosts.toLocaleString('en-IN')} + 🚜 Farm: ₹${costBreakdown.farmExpenses.toLocaleString('en-IN')})`}
               </Typography>
-              {formData.total_expenses !== lastCalculatedBoxCost && !fetchingBoxCost && (
+              {formData.total_expenses !== costBreakdown.total && !fetchingExpenses && (
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => setFormData({ ...formData, total_expenses: lastCalculatedBoxCost })}
+                  onClick={() => setFormData({ ...formData, total_expenses: costBreakdown.total })}
                   sx={{ fontSize: '0.725rem', p: 0, minWidth: 'auto', textTransform: 'none', color: 'primary.main', fontWeight: 700 }}
                 >
-                  Sync (₹{lastCalculatedBoxCost.toLocaleString('en-IN')})
+                  Sync (₹{costBreakdown.total.toLocaleString('en-IN')})
                 </Button>
               )}
             </Box>
