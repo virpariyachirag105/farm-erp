@@ -108,7 +108,7 @@ const DispatchDetailModal: React.FC<DispatchDetailModalProps> = ({ dispatchId, s
   useEffect(() => {
     if (!open || !dispatchId) return;
     setLoading(true);
-    dealerCalculationService.getDispatchCalculation(dispatchId, selectedFarm || undefined)
+    dealerCalculationService.getDispatchCalculation(dispatchId, selectedFarm || undefined, true)
       .then(setCalc)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -389,9 +389,9 @@ const DispatchDetailModal: React.FC<DispatchDetailModalProps> = ({ dispatchId, s
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#dc2626' }}>Less: Commission</Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', fontWeight: 600 }}>- {fmt(fb.commission)}</Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
-                          <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#dc2626' }}>Less: Transport</Typography>
-                          <Typography variant="body2" sx={{ fontSize: '0.78rem', fontWeight: 600 }}>- {fmt(fb.transport)}</Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', color: fb.transport > 0 ? '#dc2626' : 'text.secondary' }}>
+                          <Typography variant="body2" sx={{ fontSize: '0.78rem', color: fb.transport > 0 ? '#dc2626' : 'text.secondary' }}>Less: Transport</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.78rem', fontWeight: 600 }}>{fb.transport > 0 ? `- ${fmt(fb.transport)}` : '₹0'}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#dc2626' }}>Less: Damage Share</Typography>
@@ -453,7 +453,7 @@ const DispatchDetailModal: React.FC<DispatchDetailModalProps> = ({ dispatchId, s
                 ['Gross Amount', fmt(s!.gross_amount), false],
                 ['Free/Relative', `- ${fmt(s!.free_deduction)}`, true],
                 ['Commission', `- ${fmt(s!.commission)}`, true],
-                ['Transport', `- ${fmt(s!.transport)}`, true],
+                ['Transport', s!.transport > 0 ? `- ${fmt(s!.transport)}` : '₹0', s!.transport > 0],
                 ['Damage / Settlement', `- ${fmt(s!.damage)}`, true],
               ].map(([label, val, red]) => (
                 <React.Fragment key={label as string}>
@@ -534,8 +534,8 @@ const DealerDetailPanel: React.FC<DealerDetailPanelProps> = ({
           ].map((item) => (
             <Box key={item.label} sx={{ px: 1.5, py: 0.75, borderRadius: 2, backgroundColor: '#fff', border: '1px solid #e2e8f0', minWidth: 110 }}>
               <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontWeight: 600 }}>{item.label}</Typography>
-              <Typography variant="subtitle2" sx={{ color: item.color, fontWeight: 600 }}>
-                - {fmt(item.value)}
+              <Typography variant="subtitle2" sx={{ color: item.value > 0 ? item.color : 'text.secondary', fontWeight: 600 }}>
+                {item.value > 0 ? `- ${fmt(item.value)}` : '₹0'}
               </Typography>
             </Box>
           ))}

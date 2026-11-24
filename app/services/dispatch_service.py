@@ -77,6 +77,7 @@ class DispatchService:
             driver_name=dispatch_data.driver_name,
             transport_name=dispatch_data.transport_name,
             transport_charge=dispatch_data.transport_charge,
+            transport_paid_by_dealer=dispatch_data.transport_paid_by_dealer,
             total_boxes=dispatch_data.total_boxes,
             total_weight_kg=dispatch_data.total_weight_kg,
             total_amount=dispatch_data.total_amount,
@@ -187,6 +188,7 @@ class DispatchService:
             driver_name=dispatch_data.driver_name,
             transport_name=dispatch_data.transport_name,
             transport_charge=dispatch_data.transport_charge,
+            transport_paid_by_dealer=dispatch_data.transport_paid_by_dealer,
             remarks=dispatch_data.remarks,
             status=dispatch_data.status,
             created_by=dispatch_data.created_by
@@ -270,6 +272,7 @@ class DispatchService:
         dispatch.driver_name = dispatch_data.driver_name
         dispatch.transport_name = dispatch_data.transport_name
         dispatch.transport_charge = dispatch_data.transport_charge
+        dispatch.transport_paid_by_dealer = dispatch_data.transport_paid_by_dealer
         dispatch.remarks = dispatch_data.remarks
         dispatch.status = dispatch_data.status
 

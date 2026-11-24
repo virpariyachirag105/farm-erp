@@ -71,6 +71,7 @@ export interface DispatchCalculation {
   vehicle_no?: string | null;
   transport_name?: string | null;
   transport_charge: number;
+  transport_paid_by_dealer?: boolean;
   status?: string | null;
   items: DealerCalcItemRow[];
   free_items: FreeItemDetail[];
@@ -98,6 +99,8 @@ export interface DispatchListCalcRow {
   free_deduction: number;
   commission: number;
   transport: number;
+  transport_charge?: number;
+  transport_paid_by_dealer?: boolean;
   damage: number;
   net_amount: number;
   dealer_total_amount: number;

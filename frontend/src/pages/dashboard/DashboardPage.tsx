@@ -249,12 +249,12 @@ export const DashboardPage: React.FC = () => {
       }
       const farmNum = targetFarmId === 'ALL' ? undefined : Number(targetFarmId);
 
-      // Fetch dealer summary exactly once for the resolved season & farm
+      // Fetch calculation summary using farm dispatch calculation logic (transport charges always deducted)
       const fetchKey = `${seasonNum}_${farmNum ?? 'ALL'}`;
       prevFetchKeyRef.current = fetchKey;
 
       const initialSummaries = await dealerCalculationService
-        .getSeasonSummary(seasonNum, farmNum)
+        .getSeasonSummary(seasonNum, farmNum, false)
         .catch(() => []);
 
       setFarms(farmData);
@@ -297,7 +297,7 @@ export const DashboardPage: React.FC = () => {
     let isCurrent = true;
 
     dealerCalculationService
-      .getSeasonSummary(sId, fId)
+      .getSeasonSummary(sId, fId, false)
       .then((data) => {
         if (isCurrent) {
           setDealerSummaries(data || []);
@@ -406,7 +406,7 @@ export const DashboardPage: React.FC = () => {
       ? fItems.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0)
       : fDispatches.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
 
-    // Net Revenue from dealer summaries calculated by backend for the selected season & farm
+    // Net Revenue calculated using Season Farm Dispatch List logic (transport always deducted)
     const netRev = dealerSummaries.reduce((acc, d) => acc + Number(d.totals?.net_amount || 0), 0);
 
     // Total Box Costs
@@ -726,7 +726,7 @@ export const DashboardPage: React.FC = () => {
             subtitle="After commission, transport & loss"
             icon={<AccountBalanceWalletOutlinedIcon />}
             color="#10b981"
-            onClick={() => navigate('/calculations/dealer')}
+            onClick={() => navigate('/calculations/farm-dispatches')}
           />
         </Grid>
       </Grid>

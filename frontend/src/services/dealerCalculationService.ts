@@ -6,9 +6,14 @@ export const dealerCalculationService = {
    * Season-level dealer summary.
    * Returns all dealers with aggregated totals for the selected season.
    */
-  async getSeasonSummary(seasonId: number, farmId?: number): Promise<DealerSummary[]> {
-    const params: Record<string, number> = {};
+  async getSeasonSummary(
+    seasonId: number,
+    farmId?: number,
+    forDealer: boolean = true
+  ): Promise<DealerSummary[]> {
+    const params: Record<string, unknown> = {};
     if (farmId) params.farm_id = farmId;
+    if (forDealer !== undefined) params.for_dealer = forDealer;
     const response = await apiClient.get<DealerSummary[]>(
       `/dealer_calculations/season/${seasonId}/summary`,
       { params }
@@ -49,9 +54,14 @@ export const dealerCalculationService = {
   /**
    * Full item-level calculation for a single dispatch.
    */
-  async getDispatchCalculation(dispatchId: number, farmId?: number): Promise<DispatchCalculation> {
-    const params: Record<string, number> = {};
+  async getDispatchCalculation(
+    dispatchId: number,
+    farmId?: number,
+    forDealer?: boolean
+  ): Promise<DispatchCalculation> {
+    const params: Record<string, unknown> = {};
     if (farmId) params.farm_id = farmId;
+    if (forDealer) params.for_dealer = true;
     const response = await apiClient.get<DispatchCalculation>(
       `/dealer_calculations/dispatch/${dispatchId}`,
       { params }

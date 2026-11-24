@@ -509,7 +509,7 @@ export const DealerInvoicePage: React.FC = () => {
                   const deductionParts: string[] = [];
                   if (s.free_deduction > 0) deductionParts.push(`Free: - ${fmt(s.free_deduction)}`);
                   if (s.commission > 0) deductionParts.push(`Comm: - ${fmt(s.commission)}`);
-                  if (s.transport > 0) deductionParts.push(`Trans: - ${fmt(s.transport)}`);
+                  deductionParts.push(s.transport > 0 ? `Trans: - ${fmt(s.transport)}` : 'Trans: ₹0');
                   if (s.damage > 0) deductionParts.push(`Dam: - ${fmt(s.damage)}`);
 
                   return (
@@ -810,12 +810,10 @@ export const DealerInvoicePage: React.FC = () => {
                 </>
               )}
 
-              {totals.transport > 0 && (
-                <>
-                  <Typography sx={{ color: '#fca5a5' }}>Less Transport Charges:</Typography>
-                  <Typography sx={{ textAlign: 'right', color: '#fca5a5', fontWeight: 600 }}>- {fmt(totals.transport)}</Typography>
-                </>
-              )}
+              <Typography sx={{ color: totals.transport > 0 ? '#fca5a5' : '#94a3b8' }}>Less Transport Charges:</Typography>
+              <Typography sx={{ textAlign: 'right', color: totals.transport > 0 ? '#fca5a5' : '#94a3b8', fontWeight: 600 }}>
+                {totals.transport > 0 ? `- ${fmt(totals.transport)}` : '₹0'}
+              </Typography>
 
               {totals.damage > 0 && (
                 <>

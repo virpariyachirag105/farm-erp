@@ -12,6 +12,7 @@ class DispatchRequest(BaseModel):
     driver_name: str | None = None
     transport_name: str | None = None
     transport_charge: Decimal = Field(default=0, ge=0)
+    transport_paid_by_dealer: bool = False
     remarks: str | None = None
     status: str | None = None
     created_by: int
@@ -42,6 +43,7 @@ class DispatchResponse(BaseModel):
     driver_name: str | None = None
     transport_name: str | None = None
     transport_charge: Decimal
+    transport_paid_by_dealer: bool = False
     total_boxes: Decimal
     total_weight_kg: Decimal
     total_amount: Decimal
@@ -77,6 +79,7 @@ class DispatchListResponse(BaseModel):
     dealer_id: int | None = None
     dealer: DealerSummary | None = None
     transport_charge: Decimal
+    transport_paid_by_dealer: bool = False
     total_boxes: Decimal
     total_amount: Decimal
 

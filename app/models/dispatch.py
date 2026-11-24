@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, Column, String, Numeric, Date, Text, ForeignKey
+from sqlalchemy import Integer, Column, String, Numeric, Date, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -15,6 +15,7 @@ class Dispatch(Base, BaseModel):
     driver_name = Column(String(100), nullable=True)
     transport_name = Column(String(55), nullable=True)
     transport_charge = Column(Numeric(10,2), nullable=True)
+    transport_paid_by_dealer = Column(Boolean, default=False, nullable=False)
     total_boxes = Column(Numeric(10,2), nullable=True)
     total_weight_kg = Column(Numeric(10,2), nullable=True)
     total_amount = Column(Numeric(10,2), nullable=True)

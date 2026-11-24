@@ -56,6 +56,7 @@ class DispatchRepository:
         existing_dispatch.driver_name = dispatch_data.driver_name
         existing_dispatch.transport_name = dispatch_data.transport_name
         existing_dispatch.transport_charge = dispatch_data.transport_charge
+        existing_dispatch.transport_paid_by_dealer = dispatch_data.transport_paid_by_dealer
         existing_dispatch.total_boxes = dispatch_data.total_boxes
         existing_dispatch.total_weight_kg = dispatch_data.total_weight_kg
         existing_dispatch.total_amount = dispatch_data.total_amount

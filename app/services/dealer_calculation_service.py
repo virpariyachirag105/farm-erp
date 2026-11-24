@@ -55,7 +55,7 @@ class DealerCalculationService:
 
         return free_by_dispatch, settlements_by_dispatch
 
-    def get_season_dealer_summary(self, db: Session, season_id: int = 0, farm_id: int = None, current_user: User | None = None):
+    def get_season_dealer_summary(self, db: Session, season_id: int = 0, farm_id: int = None, current_user: User | None = None, for_dealer: bool = True):
         """
         Returns a list of dealers with their calculated totals for a given season (or all seasons if season_id is 0 or None).
         Each dealer entry includes: gross, free deductions, commission, transport,
@@ -123,7 +123,8 @@ class DealerCalculationService:
                 settlements_by_dispatch=settlements_by_dispatch,
                 all_seasons=all_seasons,
                 target_season=target_season,
-                dealer_payments=payments_by_dealer.get(dealer.id, [])
+                dealer_payments=payments_by_dealer.get(dealer.id, []),
+                apply_dealer_transport_rule=for_dealer
             )
             results.append(dealer_calc)
 
@@ -164,7 +165,8 @@ class DealerCalculationService:
             calc = self._calculate_dispatch(
                 db, dispatch, farm_id,
                 free_items_list=free_by_dispatch.get(dispatch.id),
-                settlements_list=settlements_by_dispatch.get(dispatch.id)
+                settlements_list=settlements_by_dispatch.get(dispatch.id),
+                apply_dealer_transport_rule=False
             )
             s = calc["summary"]
 
@@ -244,12 +246,23 @@ class DealerCalculationService:
 
         results = []
         for dispatch in dispatches:
-            calc = self._calculate_dispatch(db, dispatch, farm_id, allowed_farm_ids=allowed_farm_ids)
+            calc = self._calculate_dispatch(
+                db, dispatch, farm_id,
+                allowed_farm_ids=allowed_farm_ids,
+                apply_dealer_transport_rule=True
+            )
             results.append(calc)
 
         return results
 
-    def get_dispatch_calculation(self, db: Session, dispatch_id: int, farm_id: int = None, current_user: User | None = None):
+    def get_dispatch_calculation(
+        self,
+        db: Session,
+        dispatch_id: int,
+        farm_id: int = None,
+        current_user: User | None = None,
+        for_dealer: bool = False
+    ):
         """
         Returns the full item-level calculation for a single dispatch.
         """
@@ -269,7 +282,12 @@ class DealerCalculationService:
                     return None
                 allowed_farm_ids = scope["farm_ids"]
 
-        return self._calculate_dispatch(db, dispatch, farm_id=farm_id, allowed_farm_ids=allowed_farm_ids)
+        return self._calculate_dispatch(
+            db, dispatch,
+            farm_id=farm_id,
+            allowed_farm_ids=allowed_farm_ids,
+            apply_dealer_transport_rule=for_dealer
+        )
 
     # ─────────────────────────────────────────────────────────────
     #  Core Calculation Helpers
@@ -282,7 +300,8 @@ class DealerCalculationService:
         farm_id: int = None,
         allowed_farm_ids: list[int] = None,
         free_items_list: list[FreeDispatchItem] = None,
-        settlements_list: list[DispatchSettlement] = None
+        settlements_list: list[DispatchSettlement] = None,
+        apply_dealer_transport_rule: bool = False
     ):
         """
         Full calculation for a single dispatch, broken down by farm/source.
@@ -345,6 +364,18 @@ class DealerCalculationService:
         dispatch_damage = Decimal("0")
         dispatch_net = Decimal("0")
 
+        # Transport charge logic:
+        # If apply_dealer_transport_rule is True (Dealer calculations, invoices, and statements):
+        #   - If transport_paid_by_dealer is false, transport charge is 0 and excluded from deductions.
+        #   - If transport_paid_by_dealer is true, calculate and deduct transport as normal.
+        # If apply_dealer_transport_rule is False (Farm calculations & Farm dispatches):
+        #   - Standard calculation is retained and full transport charge is deducted as normal.
+        is_transport_paid = bool(getattr(dispatch, "transport_paid_by_dealer", False))
+        if apply_dealer_transport_rule and not is_transport_paid:
+            effective_transport_charge = Decimal("0")
+        else:
+            effective_transport_charge = Decimal(str(dispatch.transport_charge or 0))
+
         for farm_id_key, farm_items in farm_groups.items():
             farm = farm_items[0].farm if farm_items else None
             breakdown = self._calculate_farm_breakdown(
@@ -352,7 +383,7 @@ class DealerCalculationService:
                 items=farm_items,
                 free_by_item=free_by_item,
                 dealer=dealer,
-                dispatch_transport_charge=Decimal(str(dispatch.transport_charge or 0)),
+                dispatch_transport_charge=effective_transport_charge,
                 total_dispatch_weight=total_dispatch_weight,
                 damage_per_farm=damage_per_farm,
             )
@@ -428,7 +459,8 @@ class DealerCalculationService:
             "dealer_city": dealer.city if dealer else "",
             "vehicle_no": dispatch.vehicle_no,
             "transport_name": dispatch.transport_name,
-            "transport_charge": float(dispatch.transport_charge or 0),
+            "transport_charge": float(effective_transport_charge),
+            "transport_paid_by_dealer": is_transport_paid,
             "status": dispatch.status,
             "items": item_rows,
             "free_items": free_item_rows,
@@ -512,7 +544,8 @@ class DealerCalculationService:
         settlements_by_dispatch: dict[int, list[DispatchSettlement]] = None,
         all_seasons: list[Season] = None,
         target_season: Season = None,
-        dealer_payments: list[DealerPayment] = None
+        dealer_payments: list[DealerPayment] = None,
+        apply_dealer_transport_rule: bool = True
     ):
         """Aggregate all dispatch calculations for one dealer."""
         total_gross = Decimal("0")
@@ -529,7 +562,8 @@ class DealerCalculationService:
                 db, dispatch, farm_id,
                 allowed_farm_ids=allowed_farm_ids,
                 free_items_list=free_by_dispatch.get(dispatch.id) if free_by_dispatch is not None else None,
-                settlements_list=settlements_by_dispatch.get(dispatch.id) if settlements_by_dispatch is not None else None
+                settlements_list=settlements_by_dispatch.get(dispatch.id) if settlements_by_dispatch is not None else None,
+                apply_dealer_transport_rule=apply_dealer_transport_rule
             )
             if calc.get("free_items"):
                 all_free_items.extend(calc["free_items"])
@@ -627,7 +661,7 @@ class DealerCalculationService:
 
                 prior_net = Decimal("0")
                 for pd in prior_dispatches:
-                    pd_calc = self._calculate_dispatch(db, pd)
+                    pd_calc = self._calculate_dispatch(db, pd, apply_dealer_transport_rule=apply_dealer_transport_rule)
                     prior_net += Decimal(str(pd_calc["summary"]["net_amount"]))
 
                 prior_paid = Decimal("0")

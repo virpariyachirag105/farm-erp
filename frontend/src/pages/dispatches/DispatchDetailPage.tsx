@@ -423,7 +423,14 @@ export const DispatchDetailPage: React.FC = () => {
               <Typography variant="body2" sx={{ fontWeight: 600 }}>₹{Number(dispatch.transport_charge || 0).toLocaleString('en-IN')}</Typography>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Typography variant="caption" color="text.secondary">Transport Paid by Dealer?</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: dispatch.transport_paid_by_dealer ? 'primary.main' : 'text.primary' }}>
+                {dispatch.transport_paid_by_dealer ? 'Yes' : 'No'}
+              </Typography>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 9 }}>
               <Typography variant="caption" color="text.secondary">Dispatch Remarks</Typography>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>{dispatch.remarks || 'None'}</Typography>
             </Grid>

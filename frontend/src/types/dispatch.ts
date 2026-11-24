@@ -65,6 +65,7 @@ export interface DispatchListItem {
   dealer_id?: number | null;
   dealer?: DealerSummary | null;
   transport_charge: number;
+  transport_paid_by_dealer?: boolean;
   total_boxes: number;
   total_amount: number;
 }
@@ -81,6 +82,7 @@ export interface Dispatch {
   driver_name?: string | null;
   transport_name?: string | null;
   transport_charge: number;
+  transport_paid_by_dealer?: boolean;
   total_boxes: number;
   total_weight_kg: number;
   total_amount: number;
@@ -98,6 +100,7 @@ export interface DispatchCreateWithItems {
   driver_name?: string | null;
   transport_name?: string | null;
   transport_charge: number;
+  transport_paid_by_dealer?: boolean;
   remarks?: string | null;
   status?: string | null;
   created_by: number;
@@ -112,6 +115,7 @@ export interface DispatchUpdateWithItems {
   driver_name?: string | null;
   transport_name?: string | null;
   transport_charge: number;
+  transport_paid_by_dealer?: boolean;
   remarks?: string | null;
   status?: string | null;
   created_by: number;

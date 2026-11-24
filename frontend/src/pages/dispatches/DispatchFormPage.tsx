@@ -17,6 +17,8 @@ import {
   Alert,
   CircularProgress,
   Paper,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import AddCircleOutlineOutlinedIcon from '@mui/icons-material/AddCircleOutlineOutlined';
@@ -70,6 +72,7 @@ interface DispatchDefaults {
   vehicle_no?: string;
   driver_name?: string;
   transport_name?: string;
+  transport_paid_by_dealer?: boolean;
 }
 
 const DISPATCH_DEFAULTS_KEY = 'farm_erp_dispatch_defaults';
@@ -101,6 +104,7 @@ export const DispatchFormPage: React.FC = () => {
   const [driverName, setDriverName] = useState('');
   const [transportName, setTransportName] = useState('');
   const [transportCharge, setTransportCharge] = useState<number>(0);
+  const [transportPaidByDealer, setTransportPaidByDealer] = useState<boolean>(false);
   const [remarks, setRemarks] = useState('');
   const [status, setStatus] = useState('COMPLETED');
 
@@ -217,6 +221,9 @@ export const DispatchFormPage: React.FC = () => {
           if (savedDefaults?.vehicle_no) setVehicleNo(savedDefaults.vehicle_no);
           if (savedDefaults?.driver_name) setDriverName(savedDefaults.driver_name);
           if (savedDefaults?.transport_name) setTransportName(savedDefaults.transport_name);
+          if (typeof savedDefaults?.transport_paid_by_dealer === 'boolean') {
+            setTransportPaidByDealer(savedDefaults.transport_paid_by_dealer);
+          }
 
           setStatus('COMPLETED');
 
@@ -258,6 +265,7 @@ export const DispatchFormPage: React.FC = () => {
           setDriverName(dispatch.driver_name || '');
           setTransportName(dispatch.transport_name || '');
           setTransportCharge(Number(dispatch.transport_charge || 0));
+          setTransportPaidByDealer(Boolean(dispatch.transport_paid_by_dealer));
           setRemarks(dispatch.remarks || '');
           setStatus(dispatch.status || 'PENDING');
 
@@ -302,6 +310,7 @@ export const DispatchFormPage: React.FC = () => {
         vehicle_no: vehicleNo || undefined,
         driver_name: driverName || undefined,
         transport_name: transportName || undefined,
+        transport_paid_by_dealer: transportPaidByDealer,
       };
       localStorage.setItem(DISPATCH_DEFAULTS_KEY, JSON.stringify(defaults));
       showSuccess('Current form selections saved as your default preferences!');
@@ -448,6 +457,7 @@ export const DispatchFormPage: React.FC = () => {
           driver_name: driverName || null,
           transport_name: transportName || null,
           transport_charge: Number(transportCharge) || 0,
+          transport_paid_by_dealer: transportPaidByDealer,
           remarks: remarks || null,
           status: status || null,
           created_by: user?.id || 1,
@@ -477,6 +487,7 @@ export const DispatchFormPage: React.FC = () => {
           driver_name: driverName || null,
           transport_name: transportName || null,
           transport_charge: Number(transportCharge) || 0,
+          transport_paid_by_dealer: transportPaidByDealer,
           remarks: remarks || null,
           status: status || 'PENDING',
           created_by: user?.id || 1,
@@ -508,6 +519,7 @@ export const DispatchFormPage: React.FC = () => {
             vehicle_no: vehicleNo || undefined,
             driver_name: driverName || undefined,
             transport_name: transportName || undefined,
+            transport_paid_by_dealer: transportPaidByDealer,
           };
           localStorage.setItem(DISPATCH_DEFAULTS_KEY, JSON.stringify(defaults));
         } catch (e) {
@@ -734,7 +746,34 @@ export const DispatchFormPage: React.FC = () => {
               />
             </Grid>
 
-            <Grid size={{ xs: 12 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Box
+                sx={{
+                  border: '1px solid #c4c4c4',
+                  borderRadius: 1,
+                  px: 1.5,
+                  height: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  '&:hover': {
+                    borderColor: 'text.primary',
+                  },
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={transportPaidByDealer}
+                      onChange={(e) => setTransportPaidByDealer(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Transport Paid by Dealer"
+                />
+              </Box>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 8 }}>
               <TextField
                 label="Dispatch Remarks / Gate Pass Notes"
                 fullWidth

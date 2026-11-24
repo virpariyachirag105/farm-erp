@@ -19,14 +19,18 @@ dealer_calculation_service = DealerCalculationService()
 def get_season_dealer_summary(
     season_id: int,
     farm_id: int | None = None,
+    for_dealer: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dealer_calculation.view"))
 ):
     """
     Returns a summary list of all dealers for a season with aggregated calculations.
     Optional farm_id filter to show only dispatches involving a specific farm.
+    Optional for_dealer to toggle dealer-specific transport deduction rules (default: True).
     """
-    return dealer_calculation_service.get_season_dealer_summary(db, season_id, farm_id, current_user=current_user)
+    return dealer_calculation_service.get_season_dealer_summary(
+        db, season_id, farm_id, current_user=current_user, for_dealer=for_dealer
+    )
 
 
 @router.get("/season/{season_id}/dealer/{dealer_id}/dispatches")
@@ -60,14 +64,18 @@ def get_season_farm_dispatches(
 def get_dispatch_calculation(
     dispatch_id: int,
     farm_id: int | None = None,
+    for_dealer: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dealer_calculation.view"))
 ):
     """
     Returns full item-level calculation breakdown for a single dispatch.
     Optional farm_id to filter calculation for a specific farm.
+    Optional for_dealer boolean to apply dealer-specific rules (such as transport_paid_by_dealer).
     """
-    result = dealer_calculation_service.get_dispatch_calculation(db, dispatch_id, farm_id, current_user=current_user)
+    result = dealer_calculation_service.get_dispatch_calculation(
+        db, dispatch_id, farm_id, current_user=current_user, for_dealer=for_dealer
+    )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispatch not found.")
     return result
